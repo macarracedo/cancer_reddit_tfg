@@ -1,10 +1,19 @@
+import pickle
 from pathlib import Path
-import argparse
-from preprocessing import *
 
 if __name__ == '__main__':
-    path = Path.cwd()
-    print(f"{str(path)}/files")
-    print('PyCharm')
-    example()
-    example_2()
+    p = Path()
+    p = f'{p.home()}/Documentos/cancer_reddit_tfg'
+
+    file_to_read = open(f"{str(p)}/data/prep_tf-idf.p", "rb")
+
+    loaded_dictionary = pickle.load(file_to_read)
+
+    N = 5  # Number of anagrams to display
+
+    for k, values in loaded_dictionary.items():
+        print(f"\nFlair '{k}'")
+        unigrams = [w for w in values if len(w.split(' ')) == 1]
+        bigrams = [w for w in values if len(w.split(' ')) == 2]
+        print("Most correlated unigrams:\n\t. {}".format('\n\t. '.join(unigrams[-N:])))
+        print("Most correlated bigrams:\n\t. {}".format('\n\t. '.join(bigrams[-N:])))
