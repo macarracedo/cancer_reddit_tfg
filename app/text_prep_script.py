@@ -1,61 +1,57 @@
-"""
- text_prep_script.py
- Este script coge submissions de la BD, lleva a cabo un preprocesado del texto
- parametrizable. Esto es, se podrán modificar mediante argumentos los "filtros" que se le aplican al texto
- (stopwords, numeros, puntuación, apóstrofes, minúsculas, lematización o stemización, etc.).
- Seguidamente guardará el dataframe preprocesado en un pickle.
-"""
+# DataBase access
 
 # Parser cmd-line options and arguments
 import argparse
 # File manage
+import pickle
 from pathlib import Path
 
 # Data Manipulation
+import numpy as np
 import pandas as pd
-# Text preprocessing
-from cleantext import clean
-from nltk.stem import PorterStemmer, WordNetLemmatizer
 # Natural Language Processing
-from nltk.tokenize import word_tokenize
+from sklearn.feature_extraction.text import TfidfVectorizer
+# Statistical libraries
+from sklearn.feature_selection import chi2
 from sqlalchemy import select
 
 # DataBase access
 import db
 from models import Submission
+# Clean text methods
+from preprocessing import cleaner
+from preprocessing import cleaner_stem
+from preprocessing import lemmatize_text
 
-p = Path.cwd()
-print(str(p))
+# Data Manipulation
+# Statistical libraries
+# Natural Language Processing
+# Clean text methods
+# Data Visualisation
+# import seaborn as sns # not installed yet
 
+# Machine Learning
+
+# Performance Evaluation and Support
+
+p = Path()
+p = f'{p.home()}/Documentos/cancer_reddit_tfg'
 filename = f"{str(p)}/data/prep_tf-idf.p"
-data_path = f"{str(p)}/data"
 
 parser = argparse.ArgumentParser(description='Takes submissions from database,'
                                              '\n preprocess its body and'
                                              '\n saves them to a pickle file.')
-parser.add_argument('--output-filename', type=str, help='Name of the output file')
-parser.add_argument('--extra_spaces', nargs='?', metavar='', const=False, type=bool, default=True,
-                    help='Cleantext removes extra spaces')
-parser.add_argument('--lowercase', nargs='?', const=False, type=bool, default=True, help='Cleantext sets lowercase')
-parser.add_argument('--numbers', nargs='?', const=False, type=bool, default=True, help='Cleantext removes numbers')
-parser.add_argument('--punct', nargs='?', const=False, type=bool, default=True, help='Cleantext removes punct')
-parser.add_argument('--stopwords', nargs='?', const=False, type=bool, default=True, help='Cleantext removes stopwords')
 
 group_args = parser.add_mutually_exclusive_group()
-group_args.add_argument('-l', '--lemmatization', nargs='?', const=True, type=bool, default=False,
-                        help='Reduce las palablas a su lema')
-group_args.add_argument('-s', '--stemming', nargs='?', const=True, type=bool, default=False,
-                        help='Reduce las palabras a su raiz')
+group_args.add_argument('-l', '--lemmatization', action='store_true', help='Reduce las palablas a su lema')
+group_args.add_argument('-s', '--stemming', action='store_true', help='Reduce las palabras a su raiz')
 
 args = parser.parse_args()
 print(args)
 
-filename = "prep_text.p" if args.output_filename is None else args.output_filename
-
-# Recojo submissions de la base de datos a un dataframe
 db.Base.metadata.create_all(db.engine)
 query = select(Submission.link_flair_text, Submission.title, Submission.selftext).where(
-    Submission.link_flair_text is not None)
+    Submission.link_flair_text != None)
 result = db.session.execute(query).fetchall()
 
 features = [
@@ -63,48 +59,58 @@ features = [
     'title',
     'body'
 ]
-prep_df = pd.DataFrame(result, columns=features)
+data = pd.DataFrame(result, columns=features)
 
-prep_df['combined'] = prep_df['title']  # Creo una columna combinando titulo y cuerpo, para aportar más información
+data['id'] = data['flair'].factorize()[0]
+flair_category = data[['flair', 'id']].drop_duplicates().sort_values('id')
+print(flair_category)
 
-for i in range(len(prep_df)):
-    if type(prep_df.loc[i]['body']) != float:
-        prep_df['combined'][i] = prep_df['combined'][i] + ' ' + prep_df['body'][i]
-# Elimino columnas de Titulo y Cuerpo
-prep_df.drop('title', inplace=True, axis=1)
-prep_df.drop('body', inplace=True, axis=1)
+# Creo un diccionario de etiquetas
+category_labels = dict(flair_category.values)
+print(f'Category_lables: {category_labels}')
 
-# Aquí realizo el preprocesado parametrizado en funión de los argumentos...
-cln = lambda x: clean(x,
-                      clean_all=False,
-                      extra_spaces=args.extra_spaces,
-                      stemming=False,
-                      stopwords=args.stopwords,
-                      lowercase=args.lowercase,
-                      numbers=args.numbers,
-                      punct=args.punct,
-                      reg='',
-                      reg_replace='',
-                      stp_lang='english')
+# Combino titulo y cuerpo en una única columna para aportar más información
+data['combined'] = data['title']
+for i in range(len(data)):
+    if type(data.loc[i]['body']) != float:
+        data['combined'][i] = data['combined'][i] + ' ' + data['body'][i]
 
-#   1. Uso cleantext para remover símbolos de puntuación, caracteres no ASCII, URL, emails, dígitos, minusculas, etc.
-prep_df['result'] = prep_df['combined'].apply(cln)
-prep_df['flair'] = prep_df['flair'].apply(str.lower)
+data.head(20)
 
-#   2. Uso NLTK para tokenización.
-prep_df['result'].apply(word_tokenize)
-#   3. Uso NLTK para lemmatización o stemmización. NO FUNCIONA NINGUNO
+# manage stopwords, lowercase, extra spaces, punct, numbers... with cleantext
+data['result'] = data['combined'].apply(cleaner)
+print(f"Combined Column: \n{data['combined']}")
+
+print(f"\n\nAfter cleaner (stopwords, lowercase, extra spaces, punct, numbers...): \n{data['result']}")
+
+# filtrado de stopwords con nltk no aporta nada al hablerlo hecho antes con cleantext
+
 if args.lemmatization:
-    lm = WordNetLemmatizer()
-    prep_df['result'] = prep_df['result'].apply(lm.lemmatize)
-
+    data['result'] = data['result'].apply(lemmatize_text)  # no noto que haga nada
+    filename = f"{str(p)}/data/prep_lemm_tf-idf.p"
 elif args.stemming:
-    ps = PorterStemmer()
-    prep_df['result'] = prep_df['result'].apply(ps.stem)
+    data['result'] = data['result'].apply(cleaner_stem)
+    filename = f"{str(p)}/data/prep_stem_tf-idf.p"
 
-# Visualización y guardado del resultado
-print(f"Result DataFrame: \n{prep_df}")
+print(f"\n\nAfter lemmatization/stemming (if asked for): \n{data['result']}")
 
-# Finalmente guardo el dataframe preprocesado en un pickle.
-prep_df.to_pickle(f'{data_path}/{filename}')
-print(f'saved prep_df in {data_path}/{filename}')
+# creo instancia del vectorizador TF-IDF
+tfidf = TfidfVectorizer(sublinear_tf=True,
+                        min_df=5,
+                        norm='l2',
+                        encoding='latin-1',
+                        ngram_range=(1, 2))
+
+# Extraigo los n-gramas ejecutando el vectorizador tf-idf sobre la columna 'result'
+feat = tfidf.fit_transform(data['result'])
+labels = data['id']  # Series containing all the post labels
+
+# chisq2 statistical test
+to_save = dict()
+for f, i in category_labels.items():
+    chi2_feat = chi2(feat, labels == i)
+    indices = np.argsort(chi2_feat[0])
+    feat_names = np.array(tfidf.get_feature_names_out())[indices]
+    to_save[f] = feat_names
+
+pickle.dump(to_save, open(filename, "wb"))

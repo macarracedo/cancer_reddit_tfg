@@ -32,7 +32,7 @@ def cleaner(text: str) -> str:
                  clean_all=False,
                  extra_spaces=True,
                  stemming=False,
-                 stopwords=False,
+                 stopwords=True,
                  lowercase=True,
                  numbers=True,
                  punct=True,
