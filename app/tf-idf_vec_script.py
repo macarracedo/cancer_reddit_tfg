@@ -13,13 +13,7 @@ from pathlib import Path
 
 # Data Manipulation
 import pandas as pd
-
-# Text preprocessing
-
-
-# Natural Language Processing
-
-# DataBase access
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 p = Path.cwd()
 print(str(p))
@@ -54,50 +48,25 @@ tf_idf_df = pd.read_pickle(f'{data_path}/{filename}')
 
 print(tf_idf_df.head(20))
 
-raise Exception
-# Recojo submissions de la base de datos a un dataframe
-db.Base.metadata.create_all(db.engine)
-query = sqlalchemy.select(Submission.link_flair_text, Submission.title, Submission.selftext).where(
-    Submission.link_flair_text is not None)
-result = db.session.execute(query).fetchall()
+tfidf_vectorizer = TfidfVectorizer()
+tfidf_vectorizer_vectors = tfidf_vectorizer.fit_transform(tf_idf_df['combined'])
 
-features = [
-    'flair',
-    'title',
-    'body'
-]
-prep_df = pd.DataFrame(result, columns=features)
+# get the first vector out (for the first document)
+first_vector_tfidfvectorizer = tfidf_vectorizer_vectors[0]
+# place tf-idf values in a pandas data frame
+df = pd.DataFrame(first_vector_tfidfvectorizer.T.todense(),
+                  index=tfidf_vectorizer.get_feature_names(),
+                  columns=["tfidf"])
+df.sort_values(by=["tfidf"], ascending=False)
 
-prep_df['combined'] = prep_df['title']  # Creo una columna combinando titulo y cuerpo, para aportar más información
+print(df)
+print(df.T)
 
-for i in range(len(prep_df)):
-    if type(prep_df.loc[i]['body']) != float:
-        prep_df['combined'][i] = prep_df['combined'][i] + ' ' + prep_df['body'][i]
-# Elimino columnas de Titulo y Cuerpo
-prep_df.drop('title', inplace=True, axis=1)
-prep_df.drop('body', inplace=True, axis=1)
+print(15 * '=====')
 
-# Aquí realizo el preprocesado parametrizado en funión de los argumentos...
+tf_idf_vect = TfidfVectorizer()
+X_train_tf_idf = tf_idf_vect.fit_transform(tf_idf_df['combined']).toarray()
+terms = tf_idf_vect.get_feature_names()
 
-
-#   1. Uso cleantext para remover símbolos de puntuación, caracteres no ASCII, URL, emails, dígitos, minusculas, etc.
-prep_df['result'] = prep_df['combined'].apply(cln)
-prep_df['flair'] = prep_df['flair'].apply(str.lower)
-
-#   2. Uso NLTK para tokenización.
-prep_df['result'].apply(word_tokenize)
-#   3. Uso NLTK para lemmatización o stemmización. NO FUNCIONA NINGUNO
-if args.lemmatization:
-    lm = WordNetLemmatizer()
-    prep_df['result'] = prep_df['result'].apply(lm.lemmatize)
-
-elif args.stemming:
-    ps = PorterStemmer()
-    prep_df['result'] = prep_df['result'].apply(ps.stem)
-
-# Visualización y guardado del resultado
-print(f"Result DataFrame: \n{prep_df}")
-
-# Finalmente guardo el dataframe preprocesado en un pickle.
-prep_df.to_pickle(f'{data_path}/{filename}')
-print(f'saved prep_df in {data_path}/{filename}')
+print(terms)
+print(X_train_tf_idf)

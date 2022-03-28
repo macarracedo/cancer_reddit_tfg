@@ -107,4 +107,5 @@ print(f"Result DataFrame: \n{prep_df}")
 
 # Finalmente guardo el dataframe preprocesado en un pickle.
 prep_df.to_pickle(f'{data_path}/{filename}')
+prep_df.to_excel(f'{data_path}/{filename}')
 print(f'saved prep_df in {data_path}/{filename}')
