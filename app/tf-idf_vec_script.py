@@ -50,7 +50,7 @@ print(args)
 filename = "prep_text.p" if args.output_filename is None else args.output_filename
 
 print(f'Input file prep_df in {data_path}/{filename}')
-tf_idf_df = pd.to_pickle(f'{data_path}/{filename}')
+tf_idf_df = pd.read_pickle(f'{data_path}/{filename}')
 
 print(tf_idf_df.head(20))
 
